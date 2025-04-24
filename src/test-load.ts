@@ -1,4 +1,4 @@
-import { chromium, Page } from "playwright";
+import { chromium, Page, devices } from "playwright";
 import { writeFileSync } from "fs";
 
 // Configuration
@@ -9,6 +9,21 @@ const CONFIG = {
   DELAY_BETWEEN_USERS: 500, // ms delay between user starts (to simulate more realistic load)
   SAVE_RESULTS: true, // Whether to save results to a file
   COLLECT_METRICS: true, // Collect additional web vitals metrics
+
+  DEVICE_ENV: "mobile", // "desktop" 또는 "mobile"
+  // 모바일 설정
+  MOBILE: {
+    deviceName: "iPhone 13", // Playwright devices 객체에서 사용할 디바이스 이름
+    // 다른 모바일 관련 설정 추가 가능
+  },
+
+  // 데스크톱 설정
+  DESKTOP: {
+    viewport: { width: 1920, height: 1080 },
+    userAgent:
+      "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36",
+  },
+
   THROTTLING: {
     // Optional network throttling
     enabled: false,
@@ -108,12 +123,31 @@ async function simulateUser(userId: number): Promise<TestResult[]> {
 
   // Launch browser
   const browser = await chromium.launch({ headless: true });
-  const context = await browser.newContext({
-    viewport: { width: 1280, height: 720 },
-    userAgent:
-      "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36",
-  });
+  let contextOptions = {};
 
+  if (CONFIG.DEVICE_ENV === "mobile") {
+    // 모바일 디바이스 설정 사용
+    const deviceName = CONFIG.MOBILE?.deviceName || "iPhone 13"; // 기본값 설정
+    const deviceSettings = devices[deviceName];
+
+    if (deviceSettings) {
+      contextOptions = { ...deviceSettings };
+      console.log(`Using mobile device: ${deviceName}`);
+    } else {
+      console.error(`Device ${deviceName} not found, using default settings`);
+    }
+  } else {
+    // 데스크톱 설정 사용
+    contextOptions = {
+      viewport: { width: 1280, height: 720 },
+      userAgent:
+        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36",
+    };
+    console.log("Using desktop environment");
+  }
+
+  // 컨텍스트 생성
+  const context = await browser.newContext(contextOptions);
   // Apply network throttling if enabled
   if (CONFIG.THROTTLING.enabled) {
     await context.route("**/*", async (route) => {
@@ -168,8 +202,8 @@ async function simulateUser(userId: number): Promise<TestResult[]> {
 
     results.push(result);
     console.log(
-      `User #${userId}, Iteration #${
-        i + 1
+      `User #${userId}, Iteration #${i + 1} on ${
+        CONFIG.DEVICE_ENV
       }: Load time = ${loadTime}ms, LCP = ${webVitals.lcp.toFixed(2)}ms`
     );
 
